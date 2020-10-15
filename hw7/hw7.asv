@@ -1,0 +1,180 @@
+% hw7
+close all
+clear
+
+% P1
+f = imread('dudu.jpg');
+% f = imread('flower.jpg');
+f = im2double(f);
+% RGB to YCbCr
+f_ycbcr = rgb2ycbcr(f);
+f_y = f_ycbcr(:,:,1); % grey scale
+% apply motion filter
+len = 80;
+theta = 45;
+PSF = fspecial('motion',len,theta);
+gb = imfilter(f_y,PSF,'circular');
+% add noise
+mean_gau = 0;
+var_gau = 1;
+noise_gau = imnoise(zeros(size(gb)),'gaussian',mean_gau,var_gau); % gaussian noise
+N = fft2(noise_gau);
+Ns = fftshift(log(1+abs(N)));
+g = gb+noise_gau;
+% apply weiner filter
+% tape edge to reduce gibbens
+gs = edgetaper(g,PSF);
+% method 1 direct input with no arg
+fr1 = deconvwnr(g,PSF);
+% method 2 get ratio of average spec of noise & image
+Sn = abs(fft2(noise_gau)).^2; % power spectrum
+nA = sum(Sn(:))/numel(noise_gau); % average power spectrum
+Sf = abs(fft2(f_y)).^2; % power spectrum
+fA = sum(Sf(:))/numel(f_y); % average power spectrum
+R = nA/fA;
+fr2 = deconvwnr(g,PSF,R);
+% method 3 input self correlation
+NCORR = fftshift(real(ifft2(Sn))); % self-corr & power spec are FFT pairs
+ICORR = fftshift(real(ifft2(Sf)));
+NCORR = (real(ifft2(Sn))); % self-corr & power spec are FFT pairs
+ICORR = (real(ifft2(Sf)));
+fr3 = deconvwnr(g,PSF,NCORR,ICORR);
+fr4 = deconvwnr(gs,PSF,NCORR,ICORR);
+
+% P2
+% by observation noise with too big variation(>1) will
+% reduce the effect of reconstruction largely
+% with current p as laplacian
+gamma_set = linspace(0.1,1000,5);
+neta_sqr = size(f_y,1)*size(f_y,2)*(var_gau+mean_gau^2);
+G = (fft2(gs));
+h = PSF;
+H = freqz2(h,size(f_y,2),size(f_y,1));
+%  H_real = psf2otf(h,[size(f_y,1),size(f_y,2)]) % can get same result
+H = ifftshift(H);
+H_conj = conj(H);
+p = -fspecial('laplacian',0);
+P = freqz2(p,size(f_y,2),size(f_y,1));
+P = ifftshift(P);
+Sh = abs(H).^2;
+Sp = abs(P).^2;
+phi_r_set = zeros(size(gamma_set));
+neta_sqr_set = ones(size(gamma_set))*neta_sqr;
+show_plot = 0;
+if show_plot == 1
+    figure
+end
+for i = 1:max(size(gamma_set))
+    gamma = gamma_set(i);
+    % step 1 get F_hat
+    F_hat = (H_conj./(Sh+gamma.*Sp)).*G;
+    % step 2 get f_hat
+    f_hat = ifft2((F_hat));
+    if show_plot == 1
+        imshow(f_hat)
+        pause(0.1)
+    end
+    % step 3 get phi_r(approx of neta_sqr)
+    temp = imfilter(f_hat,h);
+    r = g-temp;
+%     phi_r = norm(r).^2;
+    phi_r = sum(sum(r.'*r));
+    phi_r_set(i) = phi_r;
+end
+figure
+plot(gamma_set,phi_r_set,'.-')
+hold on
+plot(gamma_set,neta_sqr_set,'-')
+title('phi_r changes with gamma')
+
+%% P3
+% get f_cb,fcr
+f_cb = f_ycbcr(:,:,2);
+f_cr = f_ycbcr(:,:,3);
+% 2 times downsample cb cr
+f_cb_down_sample = downsample(downsample(f_cb,2).',2).';
+f_cr_down_sample = downsample(downsample(f_cr,2).',2).';
+% 2 time upsample(replicate)
+f_cb_1 = upsample_replicate(upsample_replicate(f_cb_down_sample,2).',2).';
+f_cr_1 = upsample_replicate(upsample_replicate(f_cr_down_sample,2).',2).';
+% back to RGB
+f_ycbcr_1 = f_ycbcr;
+f_ycbcr_1(:,:,2) = f_cb_1;
+f_ycbcr_1(:,:,3) = f_cr_1;
+f_rgb_1 = ycbcr2rgb(f_ycbcr_1);
+% 2 times downsample y
+f_y = downsample(downsample(f_y,2).',2).';
+
+
+%% plot
+figure
+num_plot = 3;
+subplot(1,num_plot,1)
+imshow(f_y)
+title("origin")
+subplot(1,num_plot,2)
+imshow(gb)
+title("motion filtered")
+subplot(1,num_plot,3)
+imshow(g)
+title("motion filtered + gaussian noise")
+
+figure
+num_plot = 4;
+subplot(1,num_plot,1)
+imshow(fr1)
+title("weiner method 1")
+subplot(1,num_plot,2)
+R_set = linspace(0.1,2,10);
+for i=1:max(size(R_set))
+    R = R_set(i);
+    fr2 = deconvwnr(g,PSF,R);
+    imshow(fr2)
+    title(["weiner method 2, R:",num2str(R)])
+    pause(0.1)
+end
+subplot(1,num_plot,3)
+imshow(fr3)
+title("weiner method 3")
+subplot(1,num_plot,4)
+imshow(fr4)
+title("weiner method 3 with edge taped")
+
+figure
+num_plot = 2;
+subplot(1,num_plot,1)
+imshow(f_y)
+title("origin")
+subplot(1,num_plot,2)
+imshow(f_hat)
+title("reconstructed")
+
+figure
+num_plot = 2;
+subplot(1,num_plot,1)
+imshow(f)
+title("origin")
+subplot(1,num_plot,2)
+imshow(f_rgb_1)
+title("downsample & upsampled in cb cr")
+
+%% function
+function output = upsample_replicate(input,L)
+
+% upsample by row
+output = zeros(size(input,1)*L,size(input,2));
+for i = 1:size(input,1)
+    for j = 1:size(input,2)
+        for k = 1:L
+            output((i-1)*L+k,j) = input(i,j);
+        end
+    end
+end
+
+end
+
+
+
+
+
+

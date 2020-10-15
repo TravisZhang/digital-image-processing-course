@@ -1,0 +1,119 @@
+% hw5
+close all
+clear
+addpath('dipum_images_ch03')
+% P1
+% f = imread('Fig0310(a)(Moon Phobos).tif');
+f = imread('Fig0318(a)(ckt-board-orig).tif');
+f = im2double(f);
+
+M = 10000;
+N = 1;
+a = -1/8;
+b = 1/2;
+R = lognormal_noise(M,N,a,b);
+
+M = size(f,1);
+N = size(f,2);
+test = lognormal_noise(M,N,a,b);
+fn = f + lognormal_noise(M,N,a,b);
+
+figure
+num_figures = 3;
+subplot(1,num_figures,1)
+imshow(f)
+title('original photo')
+subplot(1,num_figures,2)
+hist(R,50)
+title('lognormal distribution')
+subplot(1,num_figures,3)
+imshow(fn)
+title('noise photo')
+
+% P3
+% test
+% A = [1 2 3;4 5 6;7 8 9]
+% s_size = [5,3]
+% f_pad = adaptive_mid_filter(A,s_size)
+a = 0.25;
+b = 0.25;
+M = size(f,1);
+N = size(f,2);
+% R = imnoise2('salt & pepper', M, N, a, b);
+% fn = f + R;
+d = 0.
+fn = imnoise(f,'salt & pepper',d);
+
+s_size = [9 9];
+s_size_init = [5 5];
+fr = adaptive_mid_filter(fn,s_size,s_size_init);
+
+figure
+num_figures = 3;
+subplot(1,num_figures,1)
+imshow(f)
+title('original photo')
+subplot(1,num_figures,2)
+imshow(fn)
+title('noised photo by salt pepper')
+subplot(1,num_figures,3)
+imshow(fr)
+title('filtered photo by adaptive median')
+
+%% functions
+function R = lognormal_noise(M,N,a,b)
+
+t = erfinv(2*rand(M,N)-1);
+R = exp(sqrt(2)*b*t+a);
+
+end
+
+function fr = adaptive_mid_filter(f,s_size,s_size_init)
+
+% first padding with repeat value
+f_pad = padarray(f, [floor(s_size(1)/2) floor(s_size(2)/2)], 'replicate','post');
+f_pad = padarray(f_pad, [floor(s_size(1)/2) floor(s_size(2)/2)], 'replicate','pre');
+offset_r = floor(s_size(1)/2);
+offset_c = floor(s_size(2)/2);
+
+fr = f;
+for i = 1:size(f,1)
+    for j = 1:size(f,2)
+        % level A
+        z_out = f(i,j);
+        s_size_now = s_size_init;
+        z_med_valid = false;
+        while s_size_now(1) < s_size(1) || s_size_now(2) < s_size(2)
+            offset_r_now = floor(s_size_now(1)/2);
+            offset_c_now = floor(s_size_now(2)/2);
+            row_indices = i+offset_r-offset_r_now:i+s_size_now(1)-1;
+            col_indices = j+offset_c-offset_c_now:j+s_size_now(2)-1;
+            s_xy = f_pad(row_indices,col_indices);
+            z_min = min(min(s_xy));
+            z_max = max(max(s_xy));
+            z_med = median(s_xy,[1 2]);
+            if within(z_med,z_min,z_max)
+                z_med_valid = true;
+                break
+            else
+                s_size_now = s_size_now+1;
+            end
+        end
+        % level B
+        if z_med_valid == true
+            if within(z_out,z_min,z_max) == false
+                z_out = z_med;
+            end
+        else
+            z_out = z_med;
+        end
+        % set value to output
+        fr(i,j) = z_out;
+    end
+end
+    
+end
+
+function result = within(a,lower,upper)
+    result = (a > lower && a < upper);
+end

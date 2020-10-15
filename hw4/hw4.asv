@@ -1,0 +1,63 @@
+% hw2
+close all
+clear
+
+f = imread('Fig0310(a)(Moon Phobos).tif');
+f = imread('Fig0316(a)(moon).tif');
+f1 = imread('Fig0315(a)(original_test_pattern).tif');
+f = im2double(f);
+
+F = fft2(f);
+S = abs(F); % magnitude
+Fc = fftshift(F);
+Sc = abs(Fc);
+A = angle(F);
+Ac = angle(Fc);
+% A_test = atan(real(F)/imag(F));
+
+F1 = fft2(f1);
+S1 = abs(F1);
+A1 = angle(F1);
+
+
+%  exchange f & f1's phase
+Fr = S.*cos(A1)+S.*sin(A1).*1i;
+Fr1 = S1.*cos(A)+S1.*sin(A).*1i;
+fr = real(ifft2(Fr));
+fr1 = real(ifft2(fr)
+
+figure
+num_figures = 5;
+subplot(1,num_figures,1)
+imshow(f)
+title('original photo')
+subplot(1,num_figures,2)
+imshow(S)
+title('original magnitude')
+subplot(1,num_figures,3)
+imshow(Sc)
+title('shifted magnitude')
+subplot(1,num_figures,4)
+imshow(A)
+title('original phase')
+subplot(1,num_figures,5)
+imshow(Ac)
+title('shifted phase')
+
+figure
+rows = 2;
+cols = 2;
+subplot(rows,cols,1)
+imshow(f)
+title('photo 1')
+subplot(rows,cols,2)
+imshow(f1)
+title('photo 2')
+
+subplot(rows,cols,1)
+imshow(f)
+title('photo 1')
+subplot(rows,cols,2)
+imshow(f1)
+title('photo 2')
+
